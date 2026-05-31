@@ -53,6 +53,8 @@ The pipeline's retrieval and synthesis capabilities were assessed against a benc
 | **Answer Relevancy** | 0.5324 | Measures how directly and appropriately the generated answer addresses the user's initial query, penalizing incomplete or redundant responses. |
 | **Context Recall**   | 0.7000 | Measures retrieval accuracy by checking whether all key ground-truth facts are present in the retrieved chunks.                                |
 
+Answer Relevancy of 0.53 reflects that responses sometimes include contextually adjacent but not directly requested information — a known limitation of chunk_size=500.
+
 ## Future Work
 
 To further optimize the performance of the Ukrainian RAG pipeline, the following areas will be explored:
