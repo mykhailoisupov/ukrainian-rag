@@ -1,0 +1,2 @@
+# This file exists to ensure that the data/processed directory is tracked by Git.
+# Processed text chunks, clean metadata, and intermediate dataset files will be stored here.
