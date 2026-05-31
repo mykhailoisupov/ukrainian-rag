@@ -1,5 +1,7 @@
 import os
 import sys
+os.environ["HF_HUB_OFFLINE"] = "1"
+os.environ["TRANSFORMERS_OFFLINE"] = "1"
 from dotenv import load_dotenv
 from openai import OpenAI
 from sentence_transformers import SentenceTransformer
@@ -16,7 +18,10 @@ load_dotenv()
 
 class RAGPipeline:
     def __init__(self):
-        client = chromadb.PersistentClient(path='data/processed/')
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        project_root = os.path.dirname(current_dir)
+        db_path = os.path.join(project_root, 'data', 'processed')
+        client = chromadb.PersistentClient(path=db_path)
         self.collection = client.get_or_create_collection(name='ukrainian_rag')
         self.encoder = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')
         self.openai_client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
@@ -64,7 +69,8 @@ class RAGPipeline:
                         "content": f"Контекст:\n{context_str}\n\nПитання: {query}"
                     }
                 ],
-                temperature=0.0
+                temperature=0.0,
+                timeout=15.0
             )
             return response.choices[0].message.content
         except Exception as e:
