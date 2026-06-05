@@ -2,8 +2,9 @@ import os
 import sys
 import glob
 from tqdm import tqdm
+from dotenv import load_dotenv
+from openai import OpenAI
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from sentence_transformers import SentenceTransformer
 import chromadb
 
 if sys.platform.startswith('win'):
@@ -13,11 +14,43 @@ if sys.platform.startswith('win'):
     except AttributeError:
         pass
 
-def ingest_documents():
+load_dotenv()
+
+
+def get_openai_embeddings(texts: list[str], client: OpenAI, model: str = 'text-embedding-3-small') -> list[list[float]]:
+    """
+    Generate embeddings for a list of texts using OpenAI's embedding API.
+    Handles batching internally — OpenAI supports up to 2048 texts per request.
+    """
+    response = client.embeddings.create(input=texts, model=model)
+    return [item.embedding for item in response.data]
+
+
+def ingest_documents(indexing_strategy: str = 'flat'):
     """
     Loads raw Ukrainian text documents, chunks them using RecursiveCharacterTextSplitter,
-    generates embeddings using SentenceTransformer, and indexes them in ChromaDB.
+    generates embeddings using OpenAI, and indexes them in ChromaDB.
+
+    Args:
+        indexing_strategy: The indexing strategy to use. Options:
+            - 'flat': Standard flat index (default)
+            - 'multi_repr': Multi-representation indexing
+            - 'raptor': RAPTOR hierarchical indexing
+            - 'colbert': ColBERT late-interaction indexing
     """
+    if indexing_strategy != 'flat':
+        if indexing_strategy == 'multi_repr':
+            from src.indexing.multi_representation import ingest_multi_representation
+            return ingest_multi_representation()
+        elif indexing_strategy == 'raptor':
+            from src.indexing.raptor import ingest_raptor
+            return ingest_raptor()
+        elif indexing_strategy == 'colbert':
+            from src.indexing.colbert import ingest_colbert
+            return ingest_colbert()
+        else:
+            raise ValueError(f"Unknown indexing strategy: {indexing_strategy}")
+
     raw_dir = os.path.join("data", "raw")
     file_pattern = os.path.join(raw_dir, "*.txt")
     file_paths = glob.glob(file_pattern)
@@ -34,8 +67,9 @@ def ingest_documents():
         separators=["\n\n", "\n", ".", " "]
     )
     
-    print("Loading SentenceTransformer model ('paraphrase-multilingual-MiniLM-L12-v2')...")
-    model = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')
+    openai_client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+    embedding_model = 'text-embedding-3-small'
+    print(f"Using OpenAI embedding model: '{embedding_model}'")
     
     all_chunks = []
     all_metadata = []
@@ -76,7 +110,7 @@ def ingest_documents():
     collection = client.get_or_create_collection(name='ukrainian_rag')
     
     batch_size = 50
-    print(f"Adding documents to ChromaDB in batches of {batch_size}...")
+    print(f"Generating OpenAI embeddings and adding to ChromaDB in batches of {batch_size}...")
     
     for i in tqdm(range(0, total_chunks, batch_size), desc="Ingesting batches"):
         end_idx = min(i + batch_size, total_chunks)
@@ -85,7 +119,7 @@ def ingest_documents():
         batch_metadata = all_metadata[i:end_idx]
         batch_ids = all_ids[i:end_idx]
         
-        batch_embeddings = model.encode(batch_chunks).tolist()
+        batch_embeddings = get_openai_embeddings(batch_chunks, openai_client, embedding_model)
         
         collection.add(
             ids=batch_ids,
@@ -100,6 +134,7 @@ def ingest_documents():
     print("=" * 50)
     print(f"Total chunks created: {total_chunks}")
     print(f"Total documents in ChromaDB: {total_docs_in_db}")
+    print(f"Embedding model: {embedding_model}")
     print("=" * 50)
 
 if __name__ == '__main__':

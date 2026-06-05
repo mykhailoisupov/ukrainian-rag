@@ -4,7 +4,6 @@ import time
 import wikipedia
 from wikipedia.exceptions import DisambiguationError, PageError
 
-# Reconfigure stdout/stderr to use UTF-8, especially on Windows to prevent UnicodeEncodeError in terminal
 if sys.platform.startswith('win'):
     try:
         sys.stdout.reconfigure(encoding='utf-8')
@@ -18,8 +17,6 @@ def fetch_and_save_wikipedia_articles():
     and displays a summary report of characters saved and download status.
     """
     wikipedia.set_lang('uk')
-    
-    # Set a custom user agent to avoid being rate-limited / blocked by Wikimedia API
     wikipedia.set_user_agent("UkrainianRAGBot/1.0 (contact@example.com)")
     
     articles = [
@@ -48,15 +45,12 @@ def fetch_and_save_wikipedia_articles():
         filename_title = article.replace(" ", "_")
         file_path = os.path.join(output_dir, f"{filename_title}.txt")
         
-        # Introduce a small delay to avoid hitting Wikimedia's rate limit
         time.sleep(1.0)
         
         try:
-            # Fetch the article page content
             page = wikipedia.page(article)
             content = page.content
             
-            # Save the article as a UTF-8 encoded .txt file
             with open(file_path, "w", encoding="utf-8") as f:
                 f.write(content)
                 
@@ -104,4 +98,3 @@ def fetch_and_save_wikipedia_articles():
 
 if __name__ == '__main__':
     fetch_and_save_wikipedia_articles()
-

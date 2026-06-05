@@ -1,10 +1,7 @@
 import os
 import sys
-os.environ["HF_HUB_OFFLINE"] = "1"
-os.environ["TRANSFORMERS_OFFLINE"] = "1"
 from dotenv import load_dotenv
 from openai import OpenAI
-from sentence_transformers import SentenceTransformer
 import chromadb
 
 if sys.platform.startswith('win'):
@@ -23,17 +20,51 @@ class RAGPipeline:
         db_path = os.path.join(project_root, 'data', 'processed')
         client = chromadb.PersistentClient(path=db_path)
         self.collection = client.get_or_create_collection(name='ukrainian_rag')
-        self.encoder = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')
         self.openai_client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
         self.openai_model = 'gpt-4o-mini'
+        self.embedding_model = 'text-embedding-3-small'
 
     def embed_query(self, query: str) -> list:
-        return self.encoder.encode(query).tolist()
+        """Generate embedding for a query using OpenAI."""
+        response = self.openai_client.embeddings.create(
+            input=query,
+            model=self.embedding_model
+        )
+        return response.data[0].embedding
+
+    def embed_texts(self, texts: list[str]) -> list[list[float]]:
+        """Generate embeddings for multiple texts using OpenAI."""
+        response = self.openai_client.embeddings.create(
+            input=texts,
+            model=self.embedding_model
+        )
+        return [item.embedding for item in response.data]
 
     def retrieve(self, query: str, n_results: int = 3) -> list[dict]:
         query_embedding = self.embed_query(query)
         results = self.collection.query(
             query_embeddings=[query_embedding],
+            n_results=n_results
+        )
+        
+        retrieved = []
+        if results and results.get('documents') and len(results['documents']) > 0:
+            documents = results['documents'][0]
+            metadatas = results['metadatas'][0]
+            distances = results['distances'][0]
+            for doc, meta, dist in zip(documents, metadatas, distances):
+                retrieved.append({
+                    'text': doc,
+                    'source': meta.get('source'),
+                    'chunk_index': meta.get('chunk_index'),
+                    'distance': dist
+                })
+        return retrieved
+
+    def retrieve_by_embedding(self, embedding: list[float], n_results: int = 3) -> list[dict]:
+        """Retrieve chunks using a pre-computed embedding vector."""
+        results = self.collection.query(
+            query_embeddings=[embedding],
             n_results=n_results
         )
         
@@ -76,14 +107,70 @@ class RAGPipeline:
         except Exception as e:
             return f"Помилка OpenAI API: {e}"
 
-    def query(self, question: str, n_results: int = 3) -> dict:
-        context_chunks = self.retrieve(question, n_results=n_results)
+    def query(self, question: str, n_results: int = 3,
+              strategy: str = 'vanilla', use_routing: bool = False,
+              active_rag: str = None) -> dict:
+        """
+        Main query method with support for multiple RAG strategies.
+
+        Args:
+            question: The user's question in Ukrainian.
+            n_results: Number of context chunks to retrieve.
+            strategy: Query translation strategy. Options:
+                - 'vanilla': Standard retrieval (default)
+                - 'multi_query': Generate multiple query phrasings
+                - 'rag_fusion': Multi-query + Reciprocal Rank Fusion
+                - 'decompose': Break complex question into sub-questions
+                - 'step_back': Abstract the question for broader retrieval
+                - 'hyde': Hypothetical Document Embedding
+            use_routing: Whether to apply query routing before retrieval.
+            active_rag: Active RAG mode. Options:
+                - None: Disabled (default)
+                - 'crag': Corrective RAG
+                - 'self_rag': Self-RAG
+                - 'adaptive': Adaptive RAG
+
+        Returns:
+            dict with 'question', 'answer', 'context_chunks', 'n_chunks_used',
+            'strategy', and optionally 'active_rag'.
+        """
+
+        if active_rag:
+            if active_rag == 'crag':
+                from src.active_rag.crag import run_crag
+                return run_crag(self, question)
+            elif active_rag == 'self_rag':
+                from src.active_rag.self_rag import run_self_rag
+                return run_self_rag(self, question)
+            elif active_rag == 'adaptive':
+                from src.active_rag.adaptive_rag import run_adaptive_rag
+                return run_adaptive_rag(self, question)
+            else:
+                raise ValueError(f"Unknown active_rag mode: {active_rag}")
+
+        if use_routing:
+            from src.routing import QueryRouter
+            router = QueryRouter(self.openai_client, self)
+            routed = router.route(question)
+            if routed:
+                return routed
+
+        if strategy == 'vanilla':
+            context_chunks = self.retrieve(question, n_results=n_results)
+        else:
+            from src.query_translation import QueryTranslator
+            translator = QueryTranslator(self.openai_client, self)
+            context_chunks = translator.translate_and_retrieve(
+                question, strategy=strategy, n_results=n_results
+            )
+
         answer = self.generate(question, context_chunks)
         return {
             'question': question,
             'answer': answer,
             'context_chunks': context_chunks,
-            'n_chunks_used': len(context_chunks)
+            'n_chunks_used': len(context_chunks),
+            'strategy': strategy
         }
 
 if __name__ == '__main__':

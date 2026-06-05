@@ -3,7 +3,6 @@ langchain==0.2.1
 langchain-openai==0.1.8
 langchain-community==0.2.1
 chromadb==0.5.0
-sentence-transformers==3.0.0
 ragas==0.1.9
 wikipedia==1.4.0
 python-dotenv==1.0.1
@@ -12,3 +11,6 @@ pandas==2.2.2
 matplotlib==3.9.0
 tqdm==4.66.4
 datasets==4.8.5
+langgraph>=0.1.0
+tavily-python>=0.3.0
+tiktoken>=0.7.0
