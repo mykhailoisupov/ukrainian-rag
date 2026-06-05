@@ -4,37 +4,27 @@ __pycache__/
 *$py.class
 .pytest_cache/
 
-# 2. Virtual Environments (Crucial to prevent uploading thousands of library files)
+# 2. Virtual Environments 
 .venv/
 venv/
 env/
 
-# 3. Environment Variables & Secrets (CRITICAL for security)
+# 3. Environment Variables & Secrets 
 .env
 .env.local
 .env.*.local
 
 # 4. Local Vector DBs & Cache
-# (Prevents syncing giant, local database files or downloaded embedding models)
 .cache/
 .chroma/
 *.db
 *.sqlite3
 
-# 5. Data & Uploads
-# (Keep your raw/processed data out of GitHub; keep data files local)
-data/raw/*
-!data/raw/.gitkeep
-data/processed/*
-!data/processed/.gitkeep
-*.csv
-*.jsonl
-*.pdf
-
-# 6. Jupyter Notebook Checkpoints
+# 5. Jupyter Notebook Checkpoints & Files
 .ipynb_checkpoints/
+*.ipynb
 
-# 7. IDEs and System Garbage
+# 6. IDEs and System Garbage
 .vscode/
 .idea/
 .DS_Store
