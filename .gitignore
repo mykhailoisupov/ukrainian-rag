@@ -29,3 +29,8 @@ env/
 .idea/
 .DS_Store
 Thumbs.db
+
+# 7. Data directories
+/data/raw/*.txt
+/data/processed/*
+!/data/processed/.gitkeep
