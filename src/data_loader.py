@@ -1,8 +1,8 @@
 import os
 import sys
 import time
-import wikipedia
-from wikipedia.exceptions import DisambiguationError, PageError
+import requests
+import json
 
 if sys.platform.startswith('win'):
     try:
@@ -16,8 +16,7 @@ def fetch_and_save_wikipedia_articles():
     Fetches full-text Wikipedia articles in Ukrainian, saves them as raw .txt files,
     and displays a summary report of characters saved and download status.
     """
-    wikipedia.set_lang('uk')
-    wikipedia.set_user_agent("UkrainianRAGBot/1.0 (contact@example.com)")
+    # Using requests instead of wikipedia library
     
     articles = [
         'Київ', 
@@ -45,46 +44,58 @@ def fetch_and_save_wikipedia_articles():
         filename_title = article.replace(" ", "_")
         file_path = os.path.join(output_dir, f"{filename_title}.txt")
         
-        time.sleep(1.0)
-        
-        try:
-            page = wikipedia.page(article)
-            content = page.content
-            
-            with open(file_path, "w", encoding="utf-8") as f:
-                f.write(content)
+        max_retries = 3
+        for attempt in range(max_retries):
+            time.sleep(1.0)
+            try:
+                headers = {'User-Agent': 'UkrainianRAGBot/1.0 (mykhailoisupov@github)'}
+                url = "https://uk.wikipedia.org/w/api.php"
+                params = {
+                    'action': 'query',
+                    'prop': 'extracts',
+                    'explaintext': '1',
+                    'titles': article,
+                    'format': 'json',
+                    'redirects': '1'
+                }
+                response = requests.get(url, headers=headers, params=params, timeout=15)
+                data = response.json()
                 
-            char_count = len(content)
-            results.append({
-                "article": article,
-                "chars": char_count,
-                "status": "success"
-            })
-            total_saved += 1
-            total_chars += char_count
-            print(f"Successfully downloaded: {article}")
-            
-        except DisambiguationError as e:
-            print(f"Warning: DisambiguationError for '{article}': {e}")
-            results.append({
-                "article": article,
-                "chars": 0,
-                "status": "skipped"
-            })
-        except PageError as e:
-            print(f"Warning: PageError (not found) for '{article}': {e}")
-            results.append({
-                "article": article,
-                "chars": 0,
-                "status": "skipped"
-            })
-        except Exception as e:
-            print(f"Warning: Unexpected exception for '{article}': {e}")
-            results.append({
-                "article": article,
-                "chars": 0,
-                "status": "skipped"
-            })
+                pages = data.get('query', {}).get('pages', {})
+                if not pages or '-1' in pages:
+                    print(f"Warning: PageError (not found) for '{article}'")
+                    results.append({"article": article, "chars": 0, "status": "skipped"})
+                    break
+                    
+                page_data = list(pages.values())[0]
+                content = page_data.get('extract', '')
+                
+                if not content:
+                    print(f"Warning: No text content returned for '{article}'")
+                    results.append({"article": article, "chars": 0, "status": "skipped"})
+                    break
+                
+                with open(file_path, "w", encoding="utf-8") as f:
+                    f.write(content)
+                    
+                char_count = len(content)
+                results.append({
+                    "article": article,
+                    "chars": char_count,
+                    "status": "success"
+                })
+                total_saved += 1
+                total_chars += char_count
+                print(f"Successfully downloaded: {article}")
+                break
+                
+            except Exception as e:
+                if attempt < max_retries - 1:
+                    print(f"Retry {attempt+1}/{max_retries} for '{article}'...")
+                    time.sleep(2.0 * (attempt + 1))
+                else:
+                    print(f"Warning: Unexpected exception for '{article}': {e}")
+                    results.append({"article": article, "chars": 0, "status": "skipped"})
             
             
     print("\n" + "=" * 65)
