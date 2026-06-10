@@ -170,6 +170,8 @@ Baseline RAGAS scores (strategy: `vanilla`):
 | **Answer Relevancy** | 0.5324 | Measures how directly the answer addresses the user's query |
 | **Context Recall**   | 0.7000 | Measures whether all key ground-truth facts are present in retrieved chunks |
 
+Answer Relevancy of 0.53 reflects that responses sometimes include contextually adjacent but not directly requested information — a known limitation of chunk_size=500.
+
 ## Setup
 
 ```bash
